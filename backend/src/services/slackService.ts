@@ -134,11 +134,15 @@ export async function sendSlackMessage(
       serialized = String(payload);
     }
 
+    if (serialized.length > 2900) {
+      serialized = serialized.substring(0, 2900) + '\n... (truncated due to Slack limits)';
+    }
+
     blocks.push({
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: '```' + serialized + '```'
+        text: '```\n' + serialized + '\n```'
       }
     });
   }

@@ -318,10 +318,12 @@ router.post('/automations/:rule_id/test', async (req: AuthRequest, res: Response
     if (matched && rule.action_type === 'slack') {
       const config = rule.action_config || {};
       const message = interpolateMessage(config.message || '', test_payload);
-      await sendSlackMessage(config.slackWebhookUrl, message, test_payload);
+      const success = await sendSlackMessage(config.slackWebhookUrl, message, test_payload);
       return res.json({
         matched: true,
-        message: 'Rule matched! Slack message would be sent.'
+        message: success 
+          ? 'Rule matched! Slack message sent successfully.' 
+          : 'Rule matched, but Slack notification failed to send. Check server logs.'
       });
     }
 

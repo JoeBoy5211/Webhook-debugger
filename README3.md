@@ -1,1 +1,0 @@
-"# Automation Rule Test - $(date)" 
