@@ -1,5 +1,6 @@
-import { BarChart3, Copy, Eraser, Trash2, Zap } from 'lucide-react';
+import { BarChart3, Copy, Eraser, Send, Trash2, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import axios from 'axios';
 import { api, getErrorMessage } from '../lib/api';
 import { useToast } from '../hooks/useToast';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -51,6 +52,25 @@ export function WebhookCard({
   const [confirmClear, setConfirmClear] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [sendingTest, setSendingTest] = useState(false);
+
+  const handleSendTestPayload = async () => {
+    setSendingTest(true);
+    try {
+      await axios.post(webhook_url, {
+        ref: 'refs/heads/main',
+        event: 'push',
+        pusher: 'webhook_debugger_user',
+        timestamp: new Date().toISOString()
+      });
+      success('Test payload sent to webhook! Automation rules executed.');
+      await loadStats();
+    } catch (err: unknown) {
+      error(`Failed to send test payload: ${getErrorMessage(err)}`);
+    } finally {
+      setSendingTest(false);
+    }
+  };
 
   const loadStats = async () => {
     try {
@@ -171,6 +191,16 @@ export function WebhookCard({
             <span className="rounded-full bg-slate-950 px-2 py-0.5 text-xs text-slate-200">
               {stats?.automation_rules_count ?? 0}
             </span>
+          </button>
+          <button
+            type="button"
+            onClick={handleSendTestPayload}
+            disabled={sendingTest}
+            className="inline-flex min-h-12 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-60"
+            title="Send a live test webhook payload to trigger automation rules"
+          >
+            {sendingTest ? <Spinner size={16} /> : <Send size={14} />}
+            Send Test Event
           </button>
           <button
             type="button"

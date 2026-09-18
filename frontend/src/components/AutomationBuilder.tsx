@@ -48,6 +48,38 @@ function isSlackUrl(value: string): boolean {
   }
 }
 
+function generateMatchingPayload(fieldPath: string, matchValue: string): string {
+  if (!fieldPath || !fieldPath.trim()) {
+    return JSON.stringify({ event: 'payment.success', amount: 99.99, user_id: '123' }, null, 2);
+  }
+  const valToUse = matchValue || 'sample_value';
+  const normalized = fieldPath.replace(/\[(\d+)\]/g, '.$1');
+  const segments = normalized.split('.').filter(Boolean);
+  if (segments.length === 0) {
+    return JSON.stringify({ event: 'payment.success', amount: 99.99, user_id: '123' }, null, 2);
+  }
+
+  let typedVal: unknown = valToUse;
+  if (!isNaN(Number(valToUse)) && valToUse.trim() !== '') {
+    typedVal = Number(valToUse);
+  } else if (valToUse.toLowerCase() === 'true') {
+    typedVal = true;
+  } else if (valToUse.toLowerCase() === 'false') {
+    typedVal = false;
+  }
+
+  const root: Record<string, unknown> = {};
+  let curr: Record<string, unknown> = root;
+  for (let i = 0; i < segments.length - 1; i++) {
+    const key = segments[i];
+    curr[key] = {};
+    curr = curr[key] as Record<string, unknown>;
+  }
+  curr[segments[segments.length - 1]] = typedVal;
+
+  return JSON.stringify(root, null, 2);
+}
+
 export function AutomationBuilder({ webhook_id, onClose }: AutomationBuilderProps) {
   const { rules, loading, error, createRule, getRules, updateRule, deleteRule, testRule } = useAutomations();
   const { success, error: toastError, warning } = useToast();
@@ -129,6 +161,7 @@ export function AutomationBuilder({ webhook_id, onClose }: AutomationBuilderProp
     setShowForm(true);
     setTestResult(null);
     setTouched({});
+    setTestPayload(generateMatchingPayload(rule.field_path, rule.match_value));
   };
 
   const handleSubmit = async () => {
@@ -304,9 +337,12 @@ export function AutomationBuilder({ webhook_id, onClose }: AutomationBuilderProp
                     </label>
                     <button
                       type="button"
-                      onClick={() => handleTest(rule.id)}
+                      onClick={() => {
+                        setTestPayload(generateMatchingPayload(rule.field_path, rule.match_value));
+                        handleTest(rule.id);
+                      }}
                       className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-lg transition-colors hover:bg-slate-700"
-                      title="Test with sample payload"
+                      title="Test with matching sample payload"
                       aria-label="Test rule"
                     >
                       {testingRuleId === rule.id ? <Spinner size={16} /> : <FlaskConical size={16} />}
@@ -482,9 +518,18 @@ export function AutomationBuilder({ webhook_id, onClose }: AutomationBuilderProp
             </p>
 
             <div>
-              <label htmlFor="sample-payload" className="mb-1 block text-sm text-slate-300">
-                Sample payload
-              </label>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label htmlFor="sample-payload" className="block text-sm text-slate-300">
+                  Sample payload
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setTestPayload(generateMatchingPayload(form.field_path, form.match_value))}
+                  className="text-xs font-medium text-blue-400 hover:text-blue-300 hover:underline"
+                >
+                  Auto-generate matching payload
+                </button>
+              </div>
               <textarea
                 id="sample-payload"
                 value={testPayload}
@@ -495,7 +540,17 @@ export function AutomationBuilder({ webhook_id, onClose }: AutomationBuilderProp
             </div>
 
             {testResult && (
-              <div className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-slate-200">{testResult}</div>
+              <div
+                className={`rounded-lg border px-4 py-3 text-sm font-medium ${
+                  testResult.includes('successfully')
+                    ? 'border-green-600/50 bg-green-950/40 text-green-200'
+                    : testResult.includes('matched')
+                    ? 'border-amber-600/50 bg-amber-950/40 text-amber-200'
+                    : 'border-slate-700 bg-slate-900 text-slate-200'
+                }`}
+              >
+                {testResult}
+              </div>
             )}
 
             <div className="flex flex-col gap-3 sm:flex-row">

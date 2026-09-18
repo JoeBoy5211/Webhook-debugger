@@ -130,7 +130,15 @@ router.delete('/webhooks/:webhook_id', authMiddleware, async (req: AuthRequest, 
 // ROUTE 2: POST /api/webhooks/receive/:webhook_id
 router.post('/webhooks/receive/:webhook_id', async (req: Request, res: Response) => {
   const { webhook_id } = req.params;
-  const payload_data = req.body;
+  let payload_data = req.body;
+
+  if (typeof payload_data === 'string') {
+    try {
+      payload_data = JSON.parse(payload_data);
+    } catch {
+      // payload_data remains a string
+    }
+  }
 
   try {
     // Check if webhook exists
@@ -144,7 +152,7 @@ router.post('/webhooks/receive/:webhook_id', async (req: Request, res: Response)
     }
 
     // Validate JSON payload
-    if (!payload_data || typeof payload_data !== 'object') {
+    if (!payload_data || (typeof payload_data !== 'object' && typeof payload_data !== 'string')) {
       return res.status(400).json({ error: 'Invalid JSON payload', status: 400 });
     }
 
@@ -153,7 +161,7 @@ router.post('/webhooks/receive/:webhook_id', async (req: Request, res: Response)
     // Insert payload
     const payloadResult = await pool.query(
       'INSERT INTO payloads (webhook_id, payload_data, received_at) VALUES ($1, $2, $3) RETURNING id, received_at',
-      [webhook_id, JSON.stringify(payload_data), received_at]
+      [webhook_id, typeof payload_data === 'string' ? payload_data : JSON.stringify(payload_data), received_at]
     );
 
     // Update last_received timestamp
@@ -162,7 +170,7 @@ router.post('/webhooks/receive/:webhook_id', async (req: Request, res: Response)
       [webhook_id]
     );
 
-    console.log(`Received webhook to ${webhook_id}`);
+    console.log(`Received webhook for ${webhook_id}`);
 
     try {
       const rules = await pool.query(
@@ -176,11 +184,15 @@ router.post('/webhooks/receive/:webhook_id', async (req: Request, res: Response)
           if (matched && rule.action_type === 'slack') {
             const config = parseActionConfig(rule.action_config);
             if (config.slackWebhookUrl) {
-              await sendSlackMessage(
+              const interpolatedMsg = interpolateMessage(config.message || '', payload_data);
+              const sent = await sendSlackMessage(
                 config.slackWebhookUrl,
-                interpolateMessage(config.message || '', payload_data),
+                interpolatedMsg,
                 payload_data
               );
+              console.log(`Automation rule "${rule.name}" (${rule.id}): matched=${matched}, slackSent=${sent}`);
+            } else {
+              console.warn(`Automation rule "${rule.name}" (${rule.id}): matched but missing Slack Webhook URL`);
             }
           }
         } catch (ruleError) {
