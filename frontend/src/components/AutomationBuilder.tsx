@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, X, Pencil, Trash2, FlaskConical, Inbox, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, FlaskConical, Inbox, AlertCircle } from 'lucide-react';
 import { CreateRuleData, RuleType, useAutomations } from '../hooks/useAutomations';
 import { useToast } from '../hooks/useToast';
 import { getErrorMessage } from '../lib/api';
@@ -60,7 +60,6 @@ export function AutomationBuilder({ webhook_id, onClose }: AutomationBuilderProp
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [initialLoad, setInitialLoad] = useState(true);
-  const [showSlackUrl, setShowSlackUrl] = useState(false);
 
   const loadRules = async () => {
     try {
@@ -86,10 +85,12 @@ export function AutomationBuilder({ webhook_id, onClose }: AutomationBuilderProp
     }
     if (!form.action_config.message.trim()) errors.message = 'Message template is required';
     const url = form.action_config.slackWebhookUrl.trim();
-    if (!url) errors.slackWebhookUrl = 'Slack webhook URL is required';
-    else if (!isSlackUrl(url)) errors.slackWebhookUrl = 'Enter a valid https://hooks.slack.com URL';
+    if (!editingId || (url && !url.includes('***'))) {
+      if (!url) errors.slackWebhookUrl = 'Slack webhook URL is required';
+      else if (!isSlackUrl(url)) errors.slackWebhookUrl = 'Enter a valid https://hooks.slack.com URL';
+    }
     return errors;
-  }, [form]);
+  }, [form, editingId]);
 
   const isValid = Object.keys(fieldErrors).length === 0;
 
@@ -421,33 +422,26 @@ export function AutomationBuilder({ webhook_id, onClose }: AutomationBuilderProp
               <label htmlFor="slack-url" className="mb-1 block text-sm text-slate-300">
                 Slack webhook URL
               </label>
-              <div className="relative flex items-center">
-                <input
-                  id="slack-url"
-                  type={showSlackUrl ? 'text' : 'password'}
-                  value={form.action_config.slackWebhookUrl}
-                  onBlur={() => setTouched((current) => ({ ...current, slackWebhookUrl: true }))}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      action_config: { ...form.action_config, slackWebhookUrl: e.target.value }
-                    })
-                  }
-                  placeholder="https://hooks.slack.com/services/..."
-                  className="input-field pr-10 font-mono text-sm"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowSlackUrl((prev) => !prev)}
-                  className="absolute right-3 text-slate-400 hover:text-slate-200 focus:outline-none p-1"
-                  aria-label={showSlackUrl ? 'Hide Slack Webhook URL' : 'Show Slack Webhook URL'}
-                  title={showSlackUrl ? 'Hide URL' : 'Show URL'}
-                >
-                  {showSlackUrl ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
+              <input
+                id="slack-url"
+                value={form.action_config.slackWebhookUrl}
+                onBlur={() => setTouched((current) => ({ ...current, slackWebhookUrl: true }))}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    action_config: { ...form.action_config, slackWebhookUrl: e.target.value }
+                  })
+                }
+                placeholder="https://hooks.slack.com/services/..."
+                className="input-field"
+              />
               {showError('slackWebhookUrl') && (
                 <p className="mt-1 text-sm text-red-400">{fieldErrors.slackWebhookUrl}</p>
+              )}
+              {form.action_config.slackWebhookUrl.includes('***') && (
+                <p className="mt-1 text-xs text-amber-400">
+                  URL is obfuscated. Paste your full Slack webhook URL (https://hooks.slack.com/services/...) and click Save changes to update.
+                </p>
               )}
             </div>
 
