@@ -49,7 +49,7 @@ function sanitizeRule(row: Record<string, unknown>) {
     match_value: row.match_value,
     action_type: row.action_type,
     action_config: {
-      slackWebhookUrl: actionConfig.slackWebhookUrl || '',
+      slackWebhookUrl: obfuscateSlackUrl(actionConfig.slackWebhookUrl),
       message: actionConfig.message || ''
     },
     enabled: row.enabled,
