@@ -49,7 +49,7 @@ function sanitizeRule(row: Record<string, unknown>) {
     match_value: row.match_value,
     action_type: row.action_type,
     action_config: {
-      slackWebhookUrl: obfuscateSlackUrl(actionConfig.slackWebhookUrl),
+      slackWebhookUrl: actionConfig.slackWebhookUrl || '',
       message: actionConfig.message || ''
     },
     enabled: row.enabled,
@@ -215,9 +215,7 @@ router.put('/automations/:rule_id', async (req: AuthRequest, res: Response) => {
     let nextConfig = existingConfig;
 
     if (action_config) {
-      const nextUrl = looksObfuscated(action_config.slackWebhookUrl)
-        ? existingConfig.slackWebhookUrl
-        : action_config.slackWebhookUrl;
+      const nextUrl = action_config.slackWebhookUrl || existingConfig.slackWebhookUrl;
 
       if (nextUrl && !isValidSlackWebhookUrl(nextUrl)) {
         return res.status(400).json({ error: 'Invalid Slack webhook URL', status: 400 });
