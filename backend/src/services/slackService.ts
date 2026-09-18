@@ -16,12 +16,28 @@ export interface AutomationRule {
   enabled?: boolean;
 }
 
-function getValueByPath(payload: unknown, fieldPath: string): unknown {
+export function parseActionConfig(config: unknown): { slackWebhookUrl?: string; message?: string } {
+  if (!config) return {};
+  if (typeof config === 'string') {
+    try {
+      return JSON.parse(config);
+    } catch {
+      return {};
+    }
+  }
+  if (typeof config === 'object') {
+    return config as { slackWebhookUrl?: string; message?: string };
+  }
+  return {};
+}
+
+export function getValueByPath(payload: unknown, fieldPath: string): unknown {
   if (!fieldPath || payload === null || payload === undefined) {
     return undefined;
   }
 
-  const segments = fieldPath.split('.').filter(Boolean);
+  const normalizedPath = fieldPath.replace(/\[(\d+)\]/g, '.$1');
+  const segments = normalizedPath.split('.').filter(Boolean);
   let current: unknown = payload;
 
   for (const segment of segments) {
@@ -113,15 +129,17 @@ export async function sendSlackMessage(
   message: string,
   payload?: unknown
 ): Promise<boolean> {
-  if (!webhookUrl) {
-    console.error('Slack notification failed: missing webhook URL');
+  if (!webhookUrl || typeof webhookUrl !== 'string' || !webhookUrl.trim() || webhookUrl.includes('***')) {
+    console.error('Slack notification failed: missing or obfuscated webhook URL');
     return false;
   }
+
+  const textMessage = message && message.trim() ? message : 'Webhook notification triggered';
 
   const blocks: Array<Record<string, unknown>> = [
     {
       type: 'section',
-      text: { type: 'mrkdwn', text: message }
+      text: { type: 'mrkdwn', text: textMessage }
     }
   ];
 
@@ -134,8 +152,8 @@ export async function sendSlackMessage(
       serialized = String(payload);
     }
 
-    if (serialized.length > 2900) {
-      serialized = serialized.substring(0, 2900) + '\n... (truncated due to Slack limits)';
+    if (serialized.length > 2500) {
+      serialized = serialized.substring(0, 2500) + '\n... (truncated due to Slack limits)';
     }
 
     blocks.push({
@@ -151,7 +169,7 @@ export async function sendSlackMessage(
     await axios.post(
       webhookUrl,
       {
-        text: message,
+        text: textMessage,
         blocks
       },
       {
@@ -161,16 +179,41 @@ export async function sendSlackMessage(
     );
     console.log('Slack notification sent successfully');
     return true;
-  } catch (error) {
-    if (axios.isAxiosError(error)) {
-      console.error(
-        'Slack notification failed:',
-        error.response?.status,
-        error.response?.data || error.message
+  } catch (primaryError) {
+    console.warn('Slack message with blocks failed, attempting fallback plain text post:', primaryError);
+    try {
+      let plainTextPayload = textMessage;
+      if (payload !== undefined) {
+        let serialized = '';
+        try {
+          serialized = JSON.stringify(payload, null, 2);
+        } catch {
+          serialized = String(payload);
+        }
+        if (serialized.length > 2500) {
+          serialized = serialized.substring(0, 2500) + '\n... (truncated)';
+        }
+        plainTextPayload += '\n```\n' + serialized + '\n```';
+      }
+      await axios.post(
+        webhookUrl,
+        { text: plainTextPayload },
+        { timeout: 10000, headers: { 'Content-Type': 'application/json' } }
       );
-    } else {
-      console.error('Slack notification failed:', error);
+      console.log('Slack fallback notification sent successfully');
+      return true;
+    } catch (fallbackError) {
+      if (axios.isAxiosError(fallbackError)) {
+        console.error(
+          'Slack notification failed:',
+          fallbackError.response?.status,
+          fallbackError.response?.data || fallbackError.message
+        );
+      } else {
+        console.error('Slack notification failed:', fallbackError);
+      }
+      return false;
     }
-    return false;
   }
 }
+

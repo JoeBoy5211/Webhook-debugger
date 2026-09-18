@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { pool } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/authMiddleware';
-import { evaluateRule, interpolateMessage, sendSlackMessage } from '../services/slackService';
+import { evaluateRule, interpolateMessage, parseActionConfig, sendSlackMessage } from '../services/slackService';
 
 const router = Router();
 
@@ -38,7 +38,7 @@ function looksObfuscated(url: string | undefined): boolean {
 }
 
 function sanitizeRule(row: Record<string, unknown>) {
-  const actionConfig = (row.action_config || {}) as { slackWebhookUrl?: string; message?: string };
+  const actionConfig = parseActionConfig(row.action_config);
   return {
     id: row.id,
     webhook_id: row.webhook_id,
@@ -211,7 +211,7 @@ router.put('/automations/:rule_id', async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const existingConfig = existing.action_config || {};
+    const existingConfig = parseActionConfig(existing.action_config);
     let nextConfig = existingConfig;
 
     if (action_config) {
@@ -225,7 +225,7 @@ router.put('/automations/:rule_id', async (req: AuthRequest, res: Response) => {
 
       nextConfig = {
         slackWebhookUrl: nextUrl || existingConfig.slackWebhookUrl,
-        message: action_config.message !== undefined ? action_config.message : existingConfig.message
+        message: action_config.message !== undefined ? action_config.message : (existingConfig.message || '')
       };
     }
 
@@ -316,14 +316,20 @@ router.post('/automations/:rule_id/test', async (req: AuthRequest, res: Response
     const matched = evaluateRule(rule, test_payload);
 
     if (matched && rule.action_type === 'slack') {
-      const config = rule.action_config || {};
+      const config = parseActionConfig(rule.action_config);
+      if (!config.slackWebhookUrl || looksObfuscated(config.slackWebhookUrl)) {
+        return res.json({
+          matched: true,
+          message: 'Rule matched, but Slack notification failed to send: Slack Webhook URL is missing or obfuscated. Please re-enter your Slack Webhook URL in rule edit.'
+        });
+      }
       const message = interpolateMessage(config.message || '', test_payload);
       const success = await sendSlackMessage(config.slackWebhookUrl, message, test_payload);
       return res.json({
         matched: true,
         message: success 
           ? 'Rule matched! Slack message sent successfully.' 
-          : 'Rule matched, but Slack notification failed to send. Check server logs.'
+          : 'Rule matched, but Slack notification failed to send. Check server logs or verify your Slack webhook URL.'
       });
     }
 
@@ -338,3 +344,4 @@ router.post('/automations/:rule_id/test', async (req: AuthRequest, res: Response
 });
 
 export default router;
+

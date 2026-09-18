@@ -178,15 +178,26 @@ export function AutomationBuilder({ webhook_id, onClose }: AutomationBuilderProp
     }
   };
 
-  const handleTest = async (ruleId: string) => {
+  const handleTest = async (ruleId: string, fromForm = false) => {
     setTestingRuleId(ruleId);
     setTestResult(null);
     try {
+      if (fromForm && editingId === ruleId && isValid) {
+        await updateRule(ruleId, form);
+        await loadRules();
+      }
       const payload = JSON.parse(testPayload);
       const result = await testRule(ruleId, payload);
       setTestResult(result.message);
-      if (result.matched) success(result.message);
-      else warning(result.message);
+      if (result.matched) {
+        if (result.message.includes('successfully')) {
+          success(result.message);
+        } else {
+          warning(result.message);
+        }
+      } else {
+        warning(result.message);
+      }
     } catch (err: unknown) {
       if (err instanceof SyntaxError) {
         setTestResult('Invalid JSON in sample payload');
@@ -492,7 +503,7 @@ export function AutomationBuilder({ webhook_id, onClose }: AutomationBuilderProp
                     warning('Create the rule first, then test it.');
                     return;
                   }
-                  handleTest(editingId);
+                  handleTest(editingId, true);
                 }}
                 disabled={loading || Boolean(testingRuleId)}
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 transition-colors hover:bg-slate-700"

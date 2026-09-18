@@ -3,7 +3,7 @@ import { pool } from '../db';
 import { v4 as uuidv4 } from 'uuid';
 import { Server as SocketIOServer } from 'socket.io';
 import { authMiddleware, AuthRequest } from '../middleware/authMiddleware';
-import { evaluateRule, interpolateMessage, sendSlackMessage } from '../services/slackService';
+import { evaluateRule, interpolateMessage, parseActionConfig, sendSlackMessage } from '../services/slackService';
 import { cleanupExpiredPayloads, manualCleanup } from '../services/cleanupService';
 
 const router = Router();
@@ -174,12 +174,14 @@ router.post('/webhooks/receive/:webhook_id', async (req: Request, res: Response)
         try {
           const matched = evaluateRule(rule, payload_data);
           if (matched && rule.action_type === 'slack') {
-            const config = rule.action_config || {};
-            await sendSlackMessage(
-              config.slackWebhookUrl,
-              interpolateMessage(config.message || '', payload_data),
-              payload_data
-            );
+            const config = parseActionConfig(rule.action_config);
+            if (config.slackWebhookUrl) {
+              await sendSlackMessage(
+                config.slackWebhookUrl,
+                interpolateMessage(config.message || '', payload_data),
+                payload_data
+              );
+            }
           }
         } catch (ruleError) {
           console.error(`Automation rule ${rule.id} failed:`, ruleError);
