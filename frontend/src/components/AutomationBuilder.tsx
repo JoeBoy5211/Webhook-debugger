@@ -212,7 +212,7 @@ export function AutomationBuilder({ webhook_id, onClose }: AutomationBuilderProp
     }
   };
 
-  const handleTest = async (ruleId: string, fromForm = false) => {
+  const handleTest = async (ruleId: string, fromForm = false, overridePayload?: string) => {
     setTestingRuleId(ruleId);
     setTestResult(null);
     try {
@@ -220,7 +220,8 @@ export function AutomationBuilder({ webhook_id, onClose }: AutomationBuilderProp
         await updateRule(ruleId, form);
         await loadRules();
       }
-      const payload = JSON.parse(testPayload);
+      const payloadStr = overridePayload !== undefined ? overridePayload : testPayload;
+      const payload = JSON.parse(payloadStr);
       const result = await testRule(ruleId, payload);
       setTestResult(result.message);
       if (result.matched) {
@@ -278,7 +279,17 @@ export function AutomationBuilder({ webhook_id, onClose }: AutomationBuilderProp
         )}
 
         {testResult && !showForm && (
-          <div className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-slate-200">{testResult}</div>
+          <div
+            className={`rounded-lg border px-4 py-3 text-sm font-medium ${
+              testResult.includes('successfully')
+                ? 'border-green-600/50 bg-green-950/40 text-green-200'
+                : testResult.includes('matched')
+                ? 'border-amber-600/50 bg-amber-950/40 text-amber-200'
+                : 'border-red-600/50 bg-red-950/40 text-red-200'
+            }`}
+          >
+            {testResult}
+          </div>
         )}
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -338,8 +349,9 @@ export function AutomationBuilder({ webhook_id, onClose }: AutomationBuilderProp
                     <button
                       type="button"
                       onClick={() => {
-                        setTestPayload(generateMatchingPayload(rule.field_path, rule.match_value));
-                        handleTest(rule.id);
+                        const generated = generateMatchingPayload(rule.field_path, rule.match_value);
+                        setTestPayload(generated);
+                        handleTest(rule.id, false, generated);
                       }}
                       className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-lg transition-colors hover:bg-slate-700"
                       title="Test with matching sample payload"
