@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, X, Pencil, Trash2, FlaskConical, Inbox, AlertCircle } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, FlaskConical, Inbox, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { CreateRuleData, RuleType, useAutomations } from '../hooks/useAutomations';
 import { useToast } from '../hooks/useToast';
 import { getErrorMessage } from '../lib/api';
@@ -60,6 +60,7 @@ export function AutomationBuilder({ webhook_id, onClose }: AutomationBuilderProp
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [initialLoad, setInitialLoad] = useState(true);
+  const [showSlackUrl, setShowSlackUrl] = useState(false);
 
   const loadRules = async () => {
     try {
@@ -422,19 +423,30 @@ export function AutomationBuilder({ webhook_id, onClose }: AutomationBuilderProp
               <label htmlFor="slack-url" className="mb-1 block text-sm text-slate-300">
                 Slack webhook URL
               </label>
-              <input
-                id="slack-url"
-                value={form.action_config.slackWebhookUrl}
-                onBlur={() => setTouched((current) => ({ ...current, slackWebhookUrl: true }))}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    action_config: { ...form.action_config, slackWebhookUrl: e.target.value }
-                  })
-                }
-                placeholder="https://hooks.slack.com/services/..."
-                className="input-field"
-              />
+              <div className="relative">
+                <input
+                  id="slack-url"
+                  type={showSlackUrl ? 'text' : 'password'}
+                  value={form.action_config.slackWebhookUrl}
+                  onBlur={() => setTouched((current) => ({ ...current, slackWebhookUrl: true }))}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      action_config: { ...form.action_config, slackWebhookUrl: e.target.value }
+                    })
+                  }
+                  placeholder="https://hooks.slack.com/services/..."
+                  className="input-field pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSlackUrl(!showSlackUrl)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                  aria-label={showSlackUrl ? 'Hide webhook URL' : 'Show webhook URL'}
+                >
+                  {showSlackUrl ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
               {showError('slackWebhookUrl') && (
                 <p className="mt-1 text-sm text-red-400">{fieldErrors.slackWebhookUrl}</p>
               )}
